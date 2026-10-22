@@ -46,7 +46,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .tap-guide{text-align:center;color:#a54c00;font-weight:900;font-size:clamp(15px,3.5vw,20px);margin:10px 0}
 .footer img{flex-shrink:0}
 
-</style></head>
+</style><style>#advanceBtn:disabled{opacity:.6;cursor:wait}</style></head>
 <body>
 <header>
 <h1>立方体の切断フラッシュカード</h1>
@@ -62,7 +62,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 <div class="wrap">
 <div class="status" id="status"></div>
 <div class="card" id="card"></div>
-<div class="note">タップするたびに「問題 → 切断面 → 正面図 → 問題」の順に表示します。左へスワイプすると次の問題、右へスワイプすると前の問題へ移動します。</div>
+<div class="note">タップで切断面を表示し、もう一度タップすると、その位置から回転して正面を向きます。次のタップで問題へ戻ります。左へスワイプすると次の問題、右へスワイプすると前の問題へ移動します。</div>
 </div>
 <script>
 const DATA=[{"no": 1, "name": "二等辺三角形", "points": [[0.0, 0.0, 0.0], [0.0, 1.0, 1.0], [0.5, 0.0, 1.0]], "positions": ["頂点", "頂点", "辺の中点"], "section": [[0.5, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 1.0, 1.0]]}, {"no": 2, "name": "正三角形", "points": [[0.0, 0.0, 0.0], [0.0, 1.0, 1.0], [1.0, 0.0, 1.0]], "positions": ["頂点", "頂点", "頂点"], "section": [[1.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 1.0, 1.0]]}, {"no": 3, "name": "台形", "points": [[0.0, 0.0, 0.0], [0.0, 1.0, 1.0], [1.0, 0.0, 0.5]], "positions": ["頂点", "頂点", "辺の中点"], "section": [[1.0, 0.49999999999999994, 1.0], [1.0, 0.0, 0.5], [0.0, 0.0, 0.0], [0.0, 1.0, 1.0]]}, {"no": 4, "name": "長方形", "points": [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0]], "positions": ["頂点", "頂点", "頂点"], "section": [[1.0, 1.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0]]}, {"no": 5, "name": "ひし形", "points": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [0.0, 0.5, 1.0]], "positions": ["頂点", "頂点", "辺の中点"], "section": [[0.0, 0.5, 1.0], [0.0, 0.0, 0.0], [1.0, 0.5, 0.0], [1.0, 1.0, 1.0]]}, {"no": 6, "name": "正方形", "points": [[0.5, 0.0, 0.0], [0.5, 0.0, 1.0], [0.5, 1.0, 0.0]], "positions": ["辺の中点", "辺の中点", "辺の中点"], "section": [[0.5, 1.0, 0.0], [0.5, 0.0, 0.0], [0.5, 0.0, 1.0], [0.5, 1.0, 1.0]]}, {"no": 7, "name": "正六角形", "points": [[0.0, 0.5, 1.0], [0.5, 0.0, 1.0], [1.0, 0.0, 0.5]], "positions": ["辺の中点", "辺の中点", "辺の中点"], "section": [[0.0, 0.5, 1.0], [0.5, 0.0, 1.0], [1.0, 0.0, 0.5], [1.0, 0.5, 0.0], [0.5, 1.0, 0.0], [0.0, 1.0, 0.5]]}];
@@ -103,7 +103,7 @@ function svgFor(d,showSection){
   return s;
 }
 
-function sectionCoordinates(d){
+function sectionFrame(d){
  const sub=(a,b)=>a.map((v,k)=>v-b[k]),dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0),unit=a=>{const n=Math.hypot(...a);return a.map(v=>v/n);},cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
  const points=d.section,n=points.length,normal=unit(cross(sub(points[1],points[0]),sub(points[2],points[0])));
  let base=0,best=-1;
@@ -122,7 +122,11 @@ function sectionCoordinates(d){
   const baseY=(dot(sub(points[base],origin),v)+dot(sub(points[(base+1)%n],origin),v))/2;
   if(baseY>0)v=v.map(x=>-x);
  }
- return points.map(p=>[dot(sub(p,origin),u),dot(sub(p,origin),v)]);
+ return {u,v,origin};
+}
+function sectionCoordinates(d){
+ const {u,v,origin}=sectionFrame(d);
+ return d.section.map(p=>{const q=p.map((x,k)=>x-origin[k]);return[q.reduce((s,x,k)=>s+x*u[k],0),q.reduce((s,x,k)=>s+x*v[k],0)];});
 }
 function frontSectionSvg(d){
  const coords=sectionCoordinates(d),xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);
@@ -135,7 +139,76 @@ function frontSectionSvg(d){
  points.forEach((p,i)=>{const original=d.section[i],selected=d.points.some(q=>Math.hypot(...q.map((x,k)=>x-original[k]))<1e-7);s+=`<circle cx="${p[0]}" cy="${p[1]}" r="8" fill="${selected?'#e30014':'#d97600'}" stroke="#fff" stroke-width="3"/>`;});
  return s+`<text x="280" y="410" text-anchor="middle" font-size="18" font-weight="800" fill="#7c420d">赤い点は、問題で示した3点です</text></svg>`;
 }
+let sectionTurnFrame=0,sectionTurning=false,sectionTurnProgress=0;
+const TURN={
+ add:(a,b)=>a.map((v,k)=>v+b[k]),sub:(a,b)=>a.map((v,k)=>v-b[k]),
+ dot:(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0),mul:(a,t)=>a.map(v=>v*t),
+ cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+ unit:a=>{const n=Math.hypot(...a);return a.map(v=>v/n);}
+};
+function sectionTurnModel(d){
+ const frame=sectionFrame(d),coordinates=sectionCoordinates(d),xs=coordinates.map(p=>p[0]),ys=coordinates.map(p=>p[1]);
+ const scale=Math.min(430/(Math.max(...xs)-Math.min(...xs)),270/(Math.max(...ys)-Math.min(...ys)));
+ const A=[230,78,0],B=[0,78,230],u=TURN.unit(A),v=TURN.unit(TURN.sub(B,TURN.mul(u,TURN.dot(B,u)))),normal=TURN.cross(u,v),sourceNormal=TURN.cross(frame.u,frame.v);
+ const R=Array.from({length:3},(_,i)=>Array.from({length:3},(_,j)=>u[i]*frame.u[j]+v[i]*frame.v[j]+normal[i]*sourceNormal[j]));
+ let q;const trace=R[0][0]+R[1][1]+R[2][2];
+ if(trace>0){const s=2*Math.sqrt(trace+1);q=[(R[2][1]-R[1][2])/s,(R[0][2]-R[2][0])/s,(R[1][0]-R[0][1])/s,s/4];}
+ else if(R[0][0]>R[1][1]&&R[0][0]>R[2][2]){const s=2*Math.sqrt(1+R[0][0]-R[1][1]-R[2][2]);q=[s/4,(R[0][1]+R[1][0])/s,(R[0][2]+R[2][0])/s,(R[2][1]-R[1][2])/s];}
+ else if(R[1][1]>R[2][2]){const s=2*Math.sqrt(1+R[1][1]-R[0][0]-R[2][2]);q=[(R[0][1]+R[1][0])/s,s/4,(R[1][2]+R[2][1])/s,(R[0][2]-R[2][0])/s];}
+ else{const s=2*Math.sqrt(1+R[2][2]-R[0][0]-R[1][1]);q=[(R[0][2]+R[2][0])/s,(R[1][2]+R[2][1])/s,s/4,(R[1][0]-R[0][1])/s];}
+ q=TURN.unit(q);if(q[3]<0)q=q.map(x=>-x);
+ const sin=Math.hypot(...q.slice(0,3)),axis=sin>1e-9?q.slice(0,3).map(x=>x/sin):[1,0,0],angle=2*Math.atan2(sin,q[3]);
+ return{d,frame,A,B,u,v,axis,angle,scale,start:P(frame.origin),end:[280-scale*(Math.min(...xs)+Math.max(...xs))/2,230+scale*(Math.min(...ys)+Math.max(...ys))/2]};
+}
+function rotatedSectionPoint(model,point,t){
+ const p=TURN.sub(point,model.frame.origin),a=model.angle*t,c=Math.cos(a),s=Math.sin(a),axis=model.axis;
+ return TURN.add(TURN.add(TURN.mul(p,c),TURN.mul(TURN.cross(axis,p),s)),TURN.mul(axis,TURN.dot(axis,p)*(1-c)));
+}
+function projectedSectionPoint(model,point,t){
+ const p=rotatedSectionPoint(model,point,t),A=model.A.map((x,k)=>x*(1-t)+model.u[k]*model.scale*t),B=model.B.map((x,k)=>x*(1-t)+model.v[k]*model.scale*t);
+ return[model.start[0]*(1-t)+model.end[0]*t+TURN.dot(A,p),model.start[1]*(1-t)+model.end[1]*t-TURN.dot(B,p)];
+}
+function cancelSectionTurn(){
+ cancelAnimationFrame(sectionTurnFrame);sectionTurning=false;
+ const button=document.getElementById('advanceBtn');if(button)button.disabled=false;
+ document.getElementById('card').setAttribute('aria-busy','false');
+}
+function startSectionTurn(){
+ const d=DATA[order[pos]],svg=document.querySelector('#card .diagram'),model=sectionTurnModel(d);
+ if(!svg)return;
+ sectionTurning=true;sectionFront=true;sectionTurnProgress=0;
+ document.getElementById('advanceBtn').disabled=true;card.setAttribute('aria-busy','true');card.querySelector('.side').textContent='回転中';
+ document.getElementById('status').textContent=`${mode}　${pos+1} / ${DATA.length}　｜　回転中`;
+ svg.classList.add('section-front');svg.setAttribute('aria-label','切断面がその位置から回転して正面を向きます');
+ const outlines=[...svg.querySelectorAll('polygon')],cube=[...svg.querySelectorAll('line')],originalMarkers=[...svg.querySelectorAll('circle')],cubeOpacity=cube.map(el=>Number(el.getAttribute('opacity')||1));
+ const ns='http://www.w3.org/2000/svg',extras=[];
+ d.section.forEach((p,i)=>{if(d.points.some(q=>Math.hypot(...TURN.sub(p,q))<1e-7))return;const circle=document.createElementNS(ns,'circle');circle.setAttribute('r','8');circle.setAttribute('fill','#d97600');circle.setAttribute('stroke','#fff');circle.setAttribute('stroke-width','3');circle.setAttribute('opacity','0');svg.appendChild(circle);extras.push({circle,point:p});});
+ const heading=document.createElementNS(ns,'text');heading.setAttribute('x','280');heading.setAttribute('y','49');heading.setAttribute('text-anchor','middle');heading.setAttribute('font-size','23');heading.setAttribute('font-weight','900');heading.setAttribute('fill','#7c420d');heading.setAttribute('opacity','0');heading.textContent='切断面を真正面から見た形';svg.appendChild(heading);
+ function draw(progress){
+  sectionTurnProgress=progress;const t=progress*progress*(3-2*progress);
+  const coords=d.section.map(p=>projectedSectionPoint(model,p,t));outlines.forEach(el=>el.setAttribute('points',coords.map(p=>p.join(',')).join(' ')));
+  const fade=1-Math.min(1,Math.max(0,(t-.08)/.55));cube.forEach((el,i)=>el.setAttribute('opacity',String(cubeOpacity[i]*fade)));
+  originalMarkers.forEach((circle,i)=>{const p=projectedSectionPoint(model,d.points[Math.floor(i/2)],t);circle.setAttribute('cx',String(p[0]));circle.setAttribute('cy',String(p[1]));circle.setAttribute('r',String((i%2?13:11)*(1-t)+(i%2?10:8)*t));if(i%2)circle.setAttribute('opacity',String(1-t));});
+  extras.forEach(({circle,point})=>{const p=projectedSectionPoint(model,point,t);circle.setAttribute('cx',String(p[0]));circle.setAttribute('cy',String(p[1]));circle.setAttribute('opacity',String(t));});
+  heading.setAttribute('opacity',String(Math.max(0,(t-.7)/.3)));
+ }
+ draw(0);let started=null;
+ function tick(now){
+  if(!sectionTurning)return;if(started===null)started=now;
+  const progress=Math.min(1,(now-started)/1900);draw(progress);
+  if(progress<1){sectionTurnFrame=requestAnimationFrame(tick);return;}
+  sectionTurning=false;card.setAttribute('aria-busy','false');card.querySelector('.side').textContent='正面図';
+  document.getElementById('status').textContent=`${mode}　${pos+1} / ${DATA.length}　｜　正面図`;
+  const button=document.getElementById('advanceBtn');button.disabled=false;button.textContent='問題へ戻る';
+  card.querySelector('.tap-guide').textContent='タップ → 問題へ戻る';
+  const detail=card.querySelector('.detail');detail.innerHTML=detail.innerHTML.split('<br>')[0]+'<br>切断面を回転させ、真正面から見た形です。';
+  svg.setAttribute('aria-label','切断面を真正面から見た'+d.name);
+ }
+ sectionTurnFrame=requestAnimationFrame(tick);
+}
+
 function render(){
+ cancelSectionTurn();
  const d=DATA[order[pos]],state=back?(sectionFront?'正面図':'切断面'):'問題';
  document.getElementById('status').textContent=`${mode}　${pos+1} / ${DATA.length}　｜　${state}`;
  document.getElementById('advanceBtn').textContent=!back?'答えを見る':sectionFront?'問題へ戻る':'正面図を見る';
@@ -146,10 +219,10 @@ function render(){
  }else{
   const counts={'頂点':0,'辺の中点':0};d.positions.forEach(x=>counts[x]++);const labels=[];
   if(counts['頂点'])labels.push(`頂点 ${counts['頂点']}個`);if(counts['辺の中点'])labels.push(`辺の中点 ${counts['辺の中点']}個`);
-  card.innerHTML=`${top}<div class="answer">${d.name}</div>${sectionFront?frontSectionSvg(d):svgFor(d,true)}<div class="detail">赤い3点の位置：${labels.join('・')}<br>${sectionFront?'切断面を真正面から見た、形や角度のゆがみのない図です。':'オレンジ色の部分が切断面です。'}</div><div class="tap-guide">${sectionFront?'タップ → 問題へ戻る':'もう一度タップ → 正面図を表示'}</div>${footer}`;
+  card.innerHTML=`${top}<div class="answer">${d.name}</div>${sectionFront?frontSectionSvg(d):svgFor(d,true)}<div class="detail">赤い3点の位置：${labels.join('・')}<br>${sectionFront?'切断面を真正面から見た、形や角度のゆがみのない図です。':'オレンジ色の部分が切断面です。'}</div><div class="tap-guide">${sectionFront?'タップ → 問題へ戻る':'もう一度タップ → 切断面が回転'}</div>${footer}`;
  }
 }
-function flip(){if(!back){back=true;sectionFront=false;}else if(!sectionFront){sectionFront=true;}else{back=false;sectionFront=false;}render();}
+function flip(){if(sectionTurning)return;if(!back){back=true;sectionFront=false;render();}else if(!sectionFront){startSectionTurn();}else{back=false;sectionFront=false;render();}}
 function next(){pos=(pos+1)%order.length;back=false;sectionFront=false;render();}
 function prev(){pos=(pos-1+order.length)%order.length;back=false;sectionFront=false;render();}
 function resetOrder(){order=DATA.map((_,i)=>i);pos=0;back=false;sectionFront=false;mode='番号順';render();}
